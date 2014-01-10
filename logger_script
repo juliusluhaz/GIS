@@ -1,0 +1,112 @@
+
+comport = "com1"
+baudrate = 4800
+databits = 8
+parity = "n"
+stopbits = 1
+terminator = chr( 10 )
+
+
+# main program loop  #
+
+
+openport( comport, baudrate, databits, parity, stopbits)
+
+openrack( "gpslogger.res" )
+
+power = 1
+pause = 0
+finished = 0
+flush( comport )
+
+
+while (1)
+    
+    while ( pause == 1 )
+       
+        if ( power == 0 )
+             cleanup
+             break
+        endif
+        
+        flush( comport )
+    wend
+    if ( finished == 1 )
+        break
+    endif
+
+    # start getting data and looking for NMEA sentences
+    # wait sentence start character which is $
+    posof$ = 0
+    while (posof$ == 0)
+        rcv = receive( comport )
+        posof$ = pos( "$", rcv )
+        
+        if ( power == 0)
+             cleanup
+             break
+        endif
+    wend
+    if ( finished == 1 )
+        break
+    endif
+    
+    posofterminator = 0
+    while ( posofterminator == 0 )
+        rcv = receive( comport )
+        posofterminator = pos( terminator, rcv )
+        
+        if ( power == 0)
+             cleanup
+             break
+        endif
+    wend
+    if ( finished == 1 )
+        break
+    endif
+    
+    sentence = mid( rcv, posof$, posofterminator)
+
+    flush( comport, posofterminator )
+    rcv = ""
+
+
+    posofGPRMC = pos ( "GPRMC", sentence)
+    if ( posofGPRMC <> 0 )
+     
+        gprmc
+    endif
+    posofGGA = pos ( "GPGGA", sentence)
+    if ( posofGGA <> 0 )
+      
+        gga
+    endif
+
+   
+wend
+
+procedure gprmc
+      
+       tk = split( sentence, "," )
+       latitude = mid( extract( 4 ), 1, 2 ) & "d" & mid( extract( 4 ), 3, 6 ) & "m " & extract( 5 )
+       longitude = mid( extract( 6 ), 1, 3 ) & "d" & mid( extract( 6 ), 4, 6 ) & "m " & extract( 7 )
+       course = extract( 9 )
+       speed = extract( 8 )
+       date = mid( extract( 10 ), 1, 2 ) & "/" & mid( extract( 10 ), 3, 2 ) & "/20" & mid( extract( 10 ), 5, 2 )
+       time = mid( extract( 2 ), 1, 2 ) & ":" & mid( extract( 2 ), 3, 2 ) & ":" & mid( extract( 2 ), 5, 2 )
+procend
+
+procedure gga
+       tk = split( sentence, "," )
+       satellites = extract( 8 )
+       altitude = extract( 10 )
+procend
+
+
+procedure cleanup
+        close( comport )
+    finished = 1
+    pause =0
+procend
+
+
